@@ -81,13 +81,21 @@ const unpackStatusIcons = {
 
 interface ProgressRoomCardProps {
   summary: UnpackProgressSummary;
+  filterStatus: UnpackStatus | null;
+  filterAbnormal: boolean | null;
 }
 
-const ProgressRoomCard = ({ summary }: ProgressRoomCardProps) => {
+const ProgressRoomCard = ({ summary, filterStatus, filterAbnormal }: ProgressRoomCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const { boxes, updateBox, toggleBoxSelection, selectedBoxIds } = useBoxStore();
 
-  const roomBoxes = boxes.filter((b) => b.targetRoom === summary.room);
+  const roomBoxes = boxes.filter((b) => {
+    if (b.targetRoom !== summary.room) return false;
+    if (filterStatus && b.unpackStatus !== filterStatus) return false;
+    if (filterAbnormal === true && b.unpackStatus !== 'abnormal') return false;
+    if (filterAbnormal === false && b.unpackStatus === 'abnormal') return false;
+    return true;
+  });
   const colors = roomColors[summary.room] || roomColors['其他'];
 
   const handleUnpackStatusChange = (boxId: string, status: UnpackStatus, e: React.MouseEvent) => {
@@ -478,7 +486,12 @@ export const UnpackProgressView = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {progressData.map((summary) => (
-              <ProgressRoomCard key={summary.room} summary={summary} />
+              <ProgressRoomCard
+                key={summary.room}
+                summary={summary}
+                filterStatus={filterStatus}
+                filterAbnormal={filterAbnormal}
+              />
             ))}
           </div>
         )}

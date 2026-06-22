@@ -330,66 +330,42 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
 
   getUnpackProgress: (roomFilter?: string | null, statusFilter?: UnpackStatus | null, abnormalFilter?: boolean | null) => {
     const { boxes } = get();
-    const summaries = getUnpackProgressSummaries(boxes);
 
     const rooms = roomFilter ? [roomFilter] : ROOMS;
 
     return rooms
       .map((room) => {
-        const data = summaries.get(room) || {
-          total: 0,
-          toUnpack: 0,
-          unpacking: 0,
-          completed: 0,
-          abnormal: 0,
+        const roomBoxes = boxes.filter((b) => b.targetRoom === room);
+        const originalTotal = roomBoxes.length;
+
+        const filteredBoxes = roomBoxes.filter((b) => {
+          if (statusFilter && b.unpackStatus !== statusFilter) return false;
+          if (abnormalFilter === true && b.unpackStatus !== 'abnormal') return false;
+          if (abnormalFilter === false && b.unpackStatus === 'abnormal') return false;
+          return true;
+        });
+
+        const data = {
+          total: filteredBoxes.length,
+          toUnpack: filteredBoxes.filter((b) => b.unpackStatus === 'toUnpack').length,
+          unpacking: filteredBoxes.filter((b) => b.unpackStatus === 'unpacking').length,
+          completed: filteredBoxes.filter((b) => b.unpackStatus === 'completed').length,
+          abnormal: filteredBoxes.filter((b) => b.unpackStatus === 'abnormal').length,
         };
 
-        let filteredData = { ...data };
-        if (statusFilter) {
-          const statusCounts = {
-            toUnpack: filteredData.toUnpack,
-            unpacking: filteredData.unpacking,
-            completed: filteredData.completed,
-            abnormal: filteredData.abnormal,
-          };
-          filteredData = {
-            ...filteredData,
-            toUnpack: statusFilter === 'toUnpack' ? statusCounts.toUnpack : 0,
-            unpacking: statusFilter === 'unpacking' ? statusCounts.unpacking : 0,
-            completed: statusFilter === 'completed' ? statusCounts.completed : 0,
-            abnormal: statusFilter === 'abnormal' ? statusCounts.abnormal : 0,
-            total: statusCounts[statusFilter],
-          };
-        }
-        if (abnormalFilter === true) {
-          filteredData = {
-            ...filteredData,
-            total: filteredData.abnormal,
-            toUnpack: 0,
-            unpacking: 0,
-            completed: 0,
-          };
-        } else if (abnormalFilter === false) {
-          filteredData = {
-            ...filteredData,
-            abnormal: 0,
-            total: filteredData.total - data.abnormal,
-          };
-        }
-
-        const rate = filteredData.total > 0
-          ? Math.round((filteredData.completed / filteredData.total) * 100)
+        const rate = data.total > 0
+          ? Math.round((data.completed / data.total) * 100)
           : 0;
 
         return {
           room,
-          totalCount: filteredData.total,
-          toUnpackCount: filteredData.toUnpack,
-          unpackingCount: filteredData.unpacking,
-          completedCount: filteredData.completed,
-          abnormalCount: filteredData.abnormal,
+          totalCount: data.total,
+          toUnpackCount: data.toUnpack,
+          unpackingCount: data.unpacking,
+          completedCount: data.completed,
+          abnormalCount: data.abnormal,
           completionRate: rate,
-          _hasOriginalData: data.total > 0,
+          _hasOriginalData: originalTotal > 0,
         };
       })
       .filter((s) => s.totalCount > 0 || s._hasOriginalData)
