@@ -25,8 +25,9 @@ interface BoxStore {
   updateBox: (id: string, updates: Partial<Box>) => Promise<void>;
   deleteBox: (id: string) => Promise<void>;
   duplicateBox: (id: string) => Promise<void>;
-  updateLoadingOrder: (boxIds: string[]) => Promise<void>;
+  swapLoadingOrder: (activeId: string, overId: string) => Promise<void>;
   batchUpdateStatus: (ids: string[], status: BoxStatus) => Promise<void>;
+  isBoxNumberDuplicate: (boxNumber: string, excludeId?: string) => boolean;
   importBoxes: (boxes: Omit<Box, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<void>;
   clearAll: () => Promise<void>;
 
@@ -117,28 +118,42 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     await get().addBox(newBoxData);
   },
 
-  updateLoadingOrder: async (boxIds) => {
-    const updates = boxIds.map((id, index) => ({
-      id,
-      changes: { loadingOrder: index + 1 },
-    }));
+  swapLoadingOrder: async (activeId: string, overId: string) => {
+    const allBoxes = get().boxes;
+    const activeBox = allBoxes.find((b) => b.id === activeId);
+    const overBox = allBoxes.find((b) => b.id === overId);
+
+    if (!activeBox || !overBox) return;
+
+    const activeOrder = activeBox.loadingOrder;
+    const overOrder = overBox.loadingOrder;
+
+    const updates = [
+      { id: activeId, changes: { loadingOrder: overOrder } },
+      { id: overId, changes: { loadingOrder: activeOrder } },
+    ];
     await updateBoxesBatch(updates);
 
     set((state) => {
-      const updatedBoxes = [...state.boxes];
-      boxIds.forEach((id, index) => {
-        const boxIndex = updatedBoxes.findIndex((b) => b.id === id);
-        if (boxIndex !== -1) {
-          updatedBoxes[boxIndex] = {
-            ...updatedBoxes[boxIndex],
-            loadingOrder: index + 1,
-            updatedAt: new Date(),
-          };
+      const updatedBoxes = state.boxes.map((box) => {
+        if (box.id === activeId) {
+          return { ...box, loadingOrder: overOrder, updatedAt: new Date() };
         }
+        if (box.id === overId) {
+          return { ...box, loadingOrder: activeOrder, updatedAt: new Date() };
+        }
+        return box;
       });
       return { boxes: updatedBoxes };
     });
     get().runValidation();
+  },
+
+  isBoxNumberDuplicate: (boxNumber: string, excludeId?: string): boolean => {
+    const allBoxes = get().boxes;
+    return allBoxes.some(
+      (b) => b.boxNumber === boxNumber.trim() && b.id !== excludeId
+    );
   },
 
   batchUpdateStatus: async (ids, status) => {

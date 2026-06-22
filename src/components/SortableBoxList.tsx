@@ -8,7 +8,6 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   rectSortingStrategy,
@@ -23,7 +22,7 @@ interface SortableBoxListProps {
 }
 
 export const SortableBoxList = ({ boxes, onEditBox }: SortableBoxListProps) => {
-  const { updateLoadingOrder, selectedBoxIds } = useBoxStore();
+  const { swapLoadingOrder, selectedBoxIds } = useBoxStore();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -40,13 +39,7 @@ export const SortableBoxList = ({ boxes, onEditBox }: SortableBoxListProps) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const oldIndex = boxes.findIndex((b) => b.id === active.id);
-      const newIndex = boxes.findIndex((b) => b.id === over.id);
-
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newOrder = arrayMove(boxes, oldIndex, newIndex);
-        updateLoadingOrder(newOrder.map((b) => b.id));
-      }
+      swapLoadingOrder(active.id as string, over.id as string);
     }
   };
 

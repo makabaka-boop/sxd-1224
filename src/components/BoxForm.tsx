@@ -12,7 +12,7 @@ interface BoxFormProps {
 }
 
 export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
-  const { addBox, updateBox, getNextLoadingOrder } = useBoxStore();
+  const { addBox, updateBox, getNextLoadingOrder, isBoxNumberDuplicate } = useBoxStore();
   const [formData, setFormData] = useState({
     boxNumber: '',
     targetRoom: ROOMS[0],
@@ -63,6 +63,8 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
 
     if (!formData.boxNumber.trim()) {
       newErrors.boxNumber = '请输入箱号';
+    } else if (isBoxNumberDuplicate(formData.boxNumber, editingBox?.id)) {
+      newErrors.boxNumber = '箱号已存在，请使用其他箱号';
     }
     if (!formData.contentSummary.trim()) {
       newErrors.contentSummary = '请输入内容摘要';

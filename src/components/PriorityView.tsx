@@ -8,7 +8,7 @@ import type { RoomSummary } from '../types';
 export const PriorityView = () => {
   const { boxes } = useBoxStore();
   const priorityBoxes = getPriorityBoxes(boxes);
-  const roomSummaries = getRoomSummaries(boxes);
+  const roomSummaries = getRoomSummaries(priorityBoxes);
 
   const summaries: RoomSummary[] = ROOMS.map((room) => {
     const data = roomSummaries.get(room) || { total: 0, priority: 0, needsReinforcement: 0 };
