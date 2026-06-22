@@ -16,6 +16,7 @@ import { useBoxStore } from '../hooks/useBoxStore';
 import { ROOMS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import type { UnpackProgressSummary, UnpackStatus } from '../types';
 import { cn } from '../lib/utils';
+import { TagBadge } from './TagBadge';
 
 const roomColors: Record<
   string,
@@ -275,6 +276,13 @@ const ProgressRoomCard = ({ summary, filterStatus, filterAbnormal }: ProgressRoo
                         <p className="text-sm text-gray-700 truncate mb-1">
                           {box.contentSummary}
                         </p>
+                        {box.tags && box.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {box.tags.map((tag) => (
+                              <TagBadge key={tag} tagName={tag} />
+                            ))}
+                          </div>
+                        )}
                         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                           {box.actualPlacement && (
                             <span className="flex items-center gap-1">

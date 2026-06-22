@@ -4,13 +4,27 @@ import { DB_NAME, DB_VERSION, STORE_NAME } from '../utils/constants';
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
-const migrateBoxData = (box: any): Box => {
+const migrateBoxData = (box: unknown): Box => {
+  const b = box as Partial<Box> & Record<string, unknown>;
   return {
-    ...box,
-    unpackStatus: (box.unpackStatus as UnpackStatus) || 'toUnpack',
-    actualPlacement: box.actualPlacement || '',
-    unpackCompletedAt: box.unpackCompletedAt ? new Date(box.unpackCompletedAt) : null,
-    abnormalNote: box.abnormalNote || '',
+    id: b.id as string,
+    boxNumber: b.boxNumber as string,
+    targetRoom: b.targetRoom as string,
+    contentSummary: b.contentSummary as string,
+    weightLevel: b.weightLevel as Box['weightLevel'],
+    isFragile: Boolean(b.isFragile),
+    fragileNote: b.fragileNote || '',
+    priorityLevel: b.priorityLevel as Box['priorityLevel'],
+    loadingOrder: Number(b.loadingOrder) || 1,
+    status: b.status as Box['status'],
+    notes: b.notes || '',
+    tags: b.tags || [],
+    unpackStatus: (b.unpackStatus as Box['unpackStatus']) || 'toUnpack',
+    actualPlacement: b.actualPlacement || '',
+    unpackCompletedAt: b.unpackCompletedAt ? new Date(b.unpackCompletedAt as Date | string) : null,
+    abnormalNote: b.abnormalNote || '',
+    createdAt: new Date(b.createdAt as Date | string),
+    updatedAt: new Date(b.updatedAt as Date | string),
   };
 };
 
@@ -30,10 +44,22 @@ export const initDB = async (): Promise<IDBPDatabase> => {
         store.createIndex('status', 'status');
         store.createIndex('updatedAt', 'updatedAt');
         store.createIndex('unpackStatus', 'unpackStatus');
-      } else if (oldVersion < 2) {
+      } else {
         store = transaction.objectStore(STORE_NAME);
-        if (store && !store.indexNames.contains('unpackStatus')) {
+        if (oldVersion < 2 && store && !store.indexNames.contains('unpackStatus')) {
           store.createIndex('unpackStatus', 'unpackStatus');
+        }
+        if (oldVersion < 3) {
+          const tx = transaction;
+          tx.objectStore(STORE_NAME).openCursor().then(function cursorIterate(cursor) {
+            if (!cursor) return;
+            const data = cursor.value;
+            if (!data.tags) {
+              data.tags = [];
+              cursor.update(data);
+            }
+            return cursor.continue().then(cursorIterate);
+          });
         }
       }
     },

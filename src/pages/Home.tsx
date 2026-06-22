@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Package,
   Plus,
   Download,
   Upload,
@@ -31,7 +30,6 @@ export default function Home() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBox, setEditingBox] = useState<Box | null>(null);
   const [currentView, setCurrentView] = useState<ViewType>('all');
-  const fileInputRef = useState<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadBoxes();
@@ -81,6 +79,7 @@ export default function Home() {
             loadingOrder: box.loadingOrder,
             status: box.status,
             notes: box.notes,
+            tags: box.tags || [],
             unpackStatus: (box.unpackStatus as UnpackStatus) || 'toUnpack',
             actualPlacement: box.actualPlacement || '',
             unpackCompletedAt: box.unpackCompletedAt || null,

@@ -10,6 +10,7 @@ export const validateBoxes = (boxes: Box[]): ValidationWarning[] => {
   warnings.push(...checkFragileWithoutNote(boxes));
   warnings.push(...checkTooManyHighPriority(boxes));
   warnings.push(...checkAbnormalWithoutNote(boxes));
+  warnings.push(...checkHighPriorityOrAbnormalWithoutTags(boxes));
 
   return warnings;
 };
@@ -210,4 +211,30 @@ export const getUnpackProgressSummaries = (
   });
 
   return summaries;
+};
+
+const checkHighPriorityOrAbnormalWithoutTags = (boxes: Box[]): ValidationWarning[] => {
+  const warnings: ValidationWarning[] = [];
+  const affectedIds: string[] = [];
+
+  boxes.forEach((box) => {
+    const hasNoTags = !box.tags || box.tags.length === 0;
+    const isHighPriority = box.priorityLevel === 5;
+    const isAbnormal = box.unpackStatus === 'abnormal';
+
+    if ((isHighPriority || isAbnormal) && hasNoTags) {
+      affectedIds.push(box.id);
+    }
+  });
+
+  if (affectedIds.length > 0) {
+    warnings.push({
+      type: 'highPriorityOrAbnormalWithoutTags',
+      severity: 'warning',
+      message: `${affectedIds.length} 个优先级为 5 或状态异常的箱子未设置标签，建议添加标签以便分类管理`,
+      affectedBoxIds: affectedIds,
+    });
+  }
+
+  return warnings;
 };

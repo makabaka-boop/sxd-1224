@@ -24,6 +24,7 @@ import type { Box, UnpackStatus } from '../types';
 import { useBoxStore } from '../hooks/useBoxStore';
 import { STATUS_OPTIONS, WEIGHT_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import { cn } from '../lib/utils';
+import { TagBadge } from './TagBadge';
 
 interface BoxCardProps {
   box: Box;
@@ -177,6 +178,14 @@ export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
           </div>
 
           <p className="text-sm text-gray-700 mb-2 line-clamp-2">{box.contentSummary}</p>
+
+          {box.tags && box.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {box.tags.map((tag) => (
+                <TagBadge key={tag} tagName={tag} />
+              ))}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mb-2">
             <div className="flex items-center gap-0.5">

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Box, BoxStatus, FilterOptions, UnpackProgressSummary, UnpackStatus, ValidationWarning, WeightLevel } from '../types';
+import type { Box, BoxStatus, FilterOptions, UnpackProgressSummary, UnpackStatus, ValidationWarning } from '../types';
 import {
   getAllBoxes,
   addBox as addBoxToDB,
@@ -9,7 +9,7 @@ import {
   bulkAddBoxes,
   clearAllBoxes,
 } from '../hooks/useIndexedDB';
-import { validateBoxes, getUnpackProgressSummaries } from '../utils/validation';
+import { validateBoxes } from '../utils/validation';
 import { ROOMS } from '../utils/constants';
 
 interface BoxStore {
@@ -33,8 +33,10 @@ interface BoxStore {
   importBoxes: (boxes: Omit<Box, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<void>;
   clearAll: () => Promise<void>;
 
-  setFilter: (key: keyof FilterOptions, value: any) => void;
+  setFilter: (key: keyof FilterOptions, value: FilterOptions[keyof FilterOptions]) => void;
   clearFilters: () => void;
+
+  getAllTags: () => string[];
 
   toggleBoxSelection: (id: string) => void;
   selectAll: () => void;
@@ -59,6 +61,7 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     isFragile: null,
     unpackStatus: null,
     isAbnormal: null,
+    tags: null,
   },
   selectedBoxIds: new Set(),
   validationWarnings: [],
@@ -124,6 +127,7 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
       loadingOrder: get().getNextLoadingOrder(),
       status: 'pending' as BoxStatus,
       notes: box.notes,
+      tags: box.tags || [],
       unpackStatus: 'toUnpack' as UnpackStatus,
       actualPlacement: '',
       unpackCompletedAt: null,
@@ -239,8 +243,14 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
         isFragile: null,
         unpackStatus: null,
         isAbnormal: null,
+        tags: null,
       },
     });
+  },
+
+  getAllTags: () => {
+    const { boxes } = get();
+    return Array.from(new Set(boxes.flatMap((box) => box.tags || [])));
   },
 
   toggleBoxSelection: (id) => {
@@ -302,6 +312,11 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     if (filters.isAbnormal !== null) {
       filtered = filtered.filter((b) => (b.unpackStatus === 'abnormal') === filters.isAbnormal);
     }
+    if (filters.tags && filters.tags.length > 0) {
+      filtered = filtered.filter((b) =>
+        filters.tags!.every((tag) => b.tags && b.tags.includes(tag))
+      );
+    }
 
     filtered.sort((a, b) => {
       let comparison = 0;
@@ -358,17 +373,19 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
           : 0;
 
         return {
-          room,
-          totalCount: data.total,
-          toUnpackCount: data.toUnpack,
-          unpackingCount: data.unpacking,
-          completedCount: data.completed,
-          abnormalCount: data.abnormal,
-          completionRate: rate,
-          _hasOriginalData: originalTotal > 0,
+          summary: {
+            room,
+            totalCount: data.total,
+            toUnpackCount: data.toUnpack,
+            unpackingCount: data.unpacking,
+            completedCount: data.completed,
+            abnormalCount: data.abnormal,
+            completionRate: rate,
+          },
+          hasData: originalTotal > 0 || data.total > 0,
         };
       })
-      .filter((s) => s.totalCount > 0 || s._hasOriginalData)
-      .map(({ _hasOriginalData, ...rest }) => rest);
+      .filter((s) => s.hasData)
+      .map((s) => s.summary);
   },
 }));

@@ -4,6 +4,7 @@ import type { Box, BoxStatus, UnpackStatus, WeightLevel } from '../types';
 import { useBoxStore } from '../hooks/useBoxStore';
 import { ROOMS, WEIGHT_LEVELS, STATUS_OPTIONS, PRIORITY_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import { cn } from '../lib/utils';
+import { TagSelector } from './TagSelector';
 
 interface BoxFormProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
     loadingOrder: 1,
     status: 'pending' as BoxStatus,
     notes: '',
+    tags: [] as string[],
     unpackStatus: 'toUnpack' as UnpackStatus,
     actualPlacement: '',
     unpackCompletedAt: null as Date | null,
@@ -51,6 +53,7 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
         loadingOrder: editingBox.loadingOrder,
         status: editingBox.status,
         notes: editingBox.notes,
+        tags: editingBox.tags || [],
         unpackStatus: editingBox.unpackStatus,
         actualPlacement: editingBox.actualPlacement,
         unpackCompletedAt: editingBox.unpackCompletedAt,
@@ -68,6 +71,7 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
         loadingOrder: getNextLoadingOrder(),
         status: 'pending',
         notes: '',
+        tags: [],
         unpackStatus: 'toUnpack',
         actualPlacement: '',
         unpackCompletedAt: null,
@@ -120,7 +124,7 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
     }
   };
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof typeof formData, value: string | number | boolean | string[] | Date | null) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       if (field === 'unpackStatus') {
@@ -334,6 +338,13 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
                 )}
               </div>
             )}
+
+            <div className="mt-4">
+              <TagSelector
+                selectedTags={formData.tags}
+                onChange={(tags) => handleChange('tags', tags)}
+              />
+            </div>
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">

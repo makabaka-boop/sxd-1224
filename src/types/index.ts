@@ -4,6 +4,12 @@ export type UnpackStatus = 'toUnpack' | 'unpacking' | 'completed' | 'abnormal';
 
 export type WeightLevel = 'light' | 'medium' | 'heavy';
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Box {
   id: string;
   boxNumber: string;
@@ -16,6 +22,7 @@ export interface Box {
   loadingOrder: number;
   status: BoxStatus;
   notes: string;
+  tags: string[];
   unpackStatus: UnpackStatus;
   actualPlacement: string;
   unpackCompletedAt: Date | null;
@@ -32,6 +39,7 @@ export interface FilterOptions {
   isFragile: boolean | null;
   unpackStatus: UnpackStatus | null;
   isAbnormal: boolean | null;
+  tags: string[] | null;
 }
 
 export interface ValidationWarning {
@@ -41,7 +49,8 @@ export interface ValidationWarning {
     | 'fragileWithoutNote'
     | 'duplicateLoadingOrder'
     | 'tooManyHighPriority'
-    | 'abnormalWithoutNote';
+    | 'abnormalWithoutNote'
+    | 'highPriorityOrAbnormalWithoutTags';
   severity: 'error' | 'warning';
   message: string;
   affectedBoxIds: string[];

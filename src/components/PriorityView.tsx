@@ -6,6 +6,7 @@ import { getPriorityBoxes, getRoomSummaries } from '../utils/validation';
 import { ROOMS, STATUS_OPTIONS, WEIGHT_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import type { RoomSummary, UnpackStatus } from '../types';
 import { cn } from '../lib/utils';
+import { TagBadge } from './TagBadge';
 
 const unpackStatusIcons = {
   toUnpack: Clock,
@@ -96,6 +97,9 @@ export const PriorityView = () => {
                     内容
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-amber-700 uppercase tracking-wider">
+                    标签
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-amber-700 uppercase tracking-wider">
                     重量
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-amber-700 uppercase tracking-wider">
@@ -115,7 +119,7 @@ export const PriorityView = () => {
               <tbody className="divide-y divide-gray-100">
                 {priorityBoxes.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                       🎉 太棒了！没有需要优先处理的箱子
                     </td>
                   </tr>
@@ -141,6 +145,17 @@ export const PriorityView = () => {
                         <td className="px-4 py-3 font-bold text-amber-700">{box.boxNumber}</td>
                         <td className="px-4 py-3 text-gray-700">{box.targetRoom}</td>
                         <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{box.contentSummary}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {box.tags && box.tags.length > 0 ? (
+                              box.tags.map((tag) => (
+                                <TagBadge key={tag} tagName={tag} />
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                             {weightConfig.label}
