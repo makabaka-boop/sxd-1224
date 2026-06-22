@@ -7,6 +7,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/priority" element={<Home />} />
+        <Route path="/progress" element={<Home />} />
       </Routes>
     </Router>
   );

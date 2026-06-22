@@ -1,12 +1,25 @@
-import type { Box } from '../types';
+import type { Box, UnpackStatus } from '../types';
+
+const migrateImportedBox = (box: any): Box => {
+  return {
+    ...box,
+    unpackStatus: (box.unpackStatus as UnpackStatus) || 'toUnpack',
+    actualPlacement: box.actualPlacement || '',
+    unpackCompletedAt: box.unpackCompletedAt ? new Date(box.unpackCompletedAt) : null,
+    abnormalNote: box.abnormalNote || '',
+    createdAt: new Date(box.createdAt),
+    updatedAt: new Date(box.updatedAt),
+  };
+};
 
 export const exportToJSON = (boxes: Box[], filename = 'moving-boxes.json'): void => {
   const exportData = {
     exportDate: new Date().toISOString(),
-    version: '1.0',
+    version: '2.0',
     totalBoxes: boxes.length,
     boxes: boxes.map((box) => ({
       ...box,
+      unpackCompletedAt: box.unpackCompletedAt ? box.unpackCompletedAt.toISOString() : null,
       createdAt: box.createdAt.toISOString(),
       updatedAt: box.updatedAt.toISOString(),
     })),
@@ -36,11 +49,7 @@ export const importFromJSON = async (file: File): Promise<Box[]> => {
           return;
         }
 
-        const boxes: Box[] = data.boxes.map((box: any) => ({
-          ...box,
-          createdAt: new Date(box.createdAt),
-          updatedAt: new Date(box.updatedAt),
-        }));
+        const boxes: Box[] = data.boxes.map((box: any) => migrateImportedBox(box));
 
         resolve(boxes);
       } catch (error) {

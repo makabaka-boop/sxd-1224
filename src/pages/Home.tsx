@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Trash2,
   Boxes,
+  TrendingUp,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBoxStore } from '../hooks/useBoxStore';
@@ -15,10 +16,13 @@ import { FilterBar } from '../components/FilterBar';
 import { ValidationAlert } from '../components/ValidationAlert';
 import { SortableBoxList } from '../components/SortableBoxList';
 import { PriorityView } from '../components/PriorityView';
+import { UnpackProgressView } from '../components/UnpackProgressView';
 import { BatchActionBar } from '../components/BatchActionBar';
 import { BoxForm } from '../components/BoxForm';
 import { exportToJSON, importFromJSON } from '../utils/export';
-import type { Box } from '../types';
+import type { Box, UnpackStatus } from '../types';
+
+type ViewType = 'all' | 'priority' | 'progress';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -26,7 +30,7 @@ export default function Home() {
   const { boxes, loadBoxes, isLoading, getFilteredBoxes, importBoxes, clearAll } = useBoxStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBox, setEditingBox] = useState<Box | null>(null);
-  const [currentView, setCurrentView] = useState<'all' | 'priority'>('all');
+  const [currentView, setCurrentView] = useState<ViewType>('all');
   const fileInputRef = useState<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -36,6 +40,8 @@ export default function Home() {
   useEffect(() => {
     if (location.pathname === '/priority') {
       setCurrentView('priority');
+    } else if (location.pathname === '/progress') {
+      setCurrentView('progress');
     } else {
       setCurrentView('all');
     }
@@ -75,6 +81,10 @@ export default function Home() {
             loadingOrder: box.loadingOrder,
             status: box.status,
             notes: box.notes,
+            unpackStatus: (box.unpackStatus as UnpackStatus) || 'toUnpack',
+            actualPlacement: box.actualPlacement || '',
+            unpackCompletedAt: box.unpackCompletedAt || null,
+            abnormalNote: box.abnormalNote || '',
           }));
           await importBoxes(boxesToImport);
           alert(`成功导入 ${boxesToImport.length} 个箱子！`);
@@ -92,10 +102,12 @@ export default function Home() {
     }
   };
 
-  const handleViewChange = (view: 'all' | 'priority') => {
+  const handleViewChange = (view: ViewType) => {
     setCurrentView(view);
     if (view === 'priority') {
       navigate('/priority');
+    } else if (view === 'progress') {
+      navigate('/progress');
     } else {
       navigate('/');
     }
@@ -156,7 +168,18 @@ export default function Home() {
                   }`}
                 >
                   <AlertTriangle className="w-4 h-4" />
-                  到达后优先清单
+                  优先清单
+                </button>
+                <button
+                  onClick={() => handleViewChange('progress')}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    currentView === 'progress'
+                      ? 'bg-white text-green-700 shadow-md'
+                      : 'text-green-500 hover:text-green-700'
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  开箱进度
                 </button>
               </div>
 
@@ -208,6 +231,8 @@ export default function Home() {
         )}
 
         {currentView === 'priority' && <PriorityView />}
+
+        {currentView === 'progress' && <UnpackProgressView />}
       </main>
 
       <BatchActionBar />
@@ -223,3 +248,4 @@ export default function Home() {
     </div>
   );
 }
+

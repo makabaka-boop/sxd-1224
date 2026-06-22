@@ -1,5 +1,7 @@
 export type BoxStatus = 'pending' | 'confirmed' | 'needsReinforcement' | 'postponed';
 
+export type UnpackStatus = 'toUnpack' | 'unpacking' | 'completed' | 'abnormal';
+
 export type WeightLevel = 'light' | 'medium' | 'heavy';
 
 export interface Box {
@@ -14,6 +16,10 @@ export interface Box {
   loadingOrder: number;
   status: BoxStatus;
   notes: string;
+  unpackStatus: UnpackStatus;
+  actualPlacement: string;
+  unpackCompletedAt: Date | null;
+  abnormalNote: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +30,8 @@ export interface FilterOptions {
   priorityLevel: number | null;
   status: BoxStatus | null;
   isFragile: boolean | null;
+  unpackStatus: UnpackStatus | null;
+  isAbnormal: boolean | null;
 }
 
 export interface ValidationWarning {
@@ -32,7 +40,8 @@ export interface ValidationWarning {
     | 'tooManyHeavyInRoom'
     | 'fragileWithoutNote'
     | 'duplicateLoadingOrder'
-    | 'tooManyHighPriority';
+    | 'tooManyHighPriority'
+    | 'abnormalWithoutNote';
   severity: 'error' | 'warning';
   message: string;
   affectedBoxIds: string[];
@@ -43,4 +52,14 @@ export interface RoomSummary {
   totalCount: number;
   priorityCount: number;
   needsReinforcementCount: number;
+}
+
+export interface UnpackProgressSummary {
+  room: string;
+  totalCount: number;
+  toUnpackCount: number;
+  unpackingCount: number;
+  completedCount: number;
+  abnormalCount: number;
+  completionRate: number;
 }

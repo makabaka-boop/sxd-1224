@@ -13,12 +13,16 @@ import {
   Clock,
   Wrench,
   XCircle,
+  ChevronDown,
+  Calendar,
+  AlertOctagon,
+  Loader2,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Box } from '../types';
+import type { Box, UnpackStatus } from '../types';
 import { useBoxStore } from '../hooks/useBoxStore';
-import { STATUS_OPTIONS, WEIGHT_LEVELS } from '../utils/constants';
+import { STATUS_OPTIONS, WEIGHT_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import { cn } from '../lib/utils';
 
 interface BoxCardProps {
@@ -34,6 +38,13 @@ const statusIcons = {
   postponed: XCircle,
 };
 
+const unpackStatusIcons = {
+  toUnpack: Clock,
+  unpacking: Loader2,
+  completed: CheckCircle2,
+  abnormal: AlertOctagon,
+};
+
 const weightColors = {
   light: 'bg-green-100 text-green-700',
   medium: 'bg-yellow-100 text-yellow-700',
@@ -42,7 +53,8 @@ const weightColors = {
 
 export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
-  const { toggleBoxSelection, deleteBox, duplicateBox, validationWarnings } = useBoxStore();
+  const [showUnpackDropdown, setShowUnpackDropdown] = useState(false);
+  const { toggleBoxSelection, deleteBox, duplicateBox, validationWarnings, updateBox } = useBoxStore();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: box.id,
@@ -57,11 +69,14 @@ export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
 
   const statusConfig = STATUS_OPTIONS.find((s) => s.value === box.status)!;
   const weightConfig = WEIGHT_LEVELS.find((w) => w.value === box.weightLevel)!;
+  const unpackStatusConfig = UNPACK_STATUS_OPTIONS.find((s) => s.value === box.unpackStatus)!;
   const StatusIcon = statusIcons[box.status];
+  const UnpackStatusIcon = unpackStatusIcons[box.unpackStatus];
 
   const hasWarning = validationWarnings.some((w) => w.affectedBoxIds.includes(box.id));
   const needsAttention =
-    (box.isFragile && !box.fragileNote) || !box.notes || box.notes.trim() === '';
+    (box.isFragile && !box.fragileNote) || !box.notes || box.notes.trim() === '' ||
+    (box.unpackStatus === 'abnormal' && !box.abnormalNote);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -80,6 +95,22 @@ export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
     toggleBoxSelection(box.id);
   };
 
+  const handleUnpackStatusChange = (e: React.MouseEvent, status: UnpackStatus) => {
+    e.stopPropagation();
+    updateBox(box.id, { unpackStatus: status });
+    setShowUnpackDropdown(false);
+  };
+
+  const formatDateTime = (date: Date | null): string => {
+    if (!date) return '';
+    return new Date(date).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -92,7 +123,10 @@ export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
         hasWarning && 'animate-shake'
       )}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setShowUnpackDropdown(false);
+      }}
     >
       <div className="absolute top-2 right-2 flex items-center gap-1">
         <button
@@ -161,9 +195,30 @@ export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
             <span className="text-xs text-gray-500">优先级 {box.priorityLevel}</span>
           </div>
 
+          {box.actualPlacement && (
+            <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mb-2 flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              放置: {box.actualPlacement}
+            </p>
+          )}
+
+          {box.unpackCompletedAt && (
+            <p className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded mb-2 flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              完成时间: {formatDateTime(box.unpackCompletedAt)}
+            </p>
+          )}
+
           {box.fragileNote && (
             <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded mb-2">
               ⚠️ {box.fragileNote}
+            </p>
+          )}
+
+          {box.abnormalNote && (
+            <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded mb-2 flex items-start gap-1">
+              <AlertOctagon className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span>异常: {box.abnormalNote}</span>
             </p>
           )}
 
@@ -175,14 +230,65 @@ export const BoxCard = ({ box, onEdit, isSelected }: BoxCardProps) => {
 
           {needsAttention && (
             <p className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded mb-2">
-              ⚡ {!box.fragileNote && box.isFragile ? '缺少易碎提醒' : '备注不完整'}
+              ⚡ {!box.fragileNote && box.isFragile
+                ? '缺少易碎提醒'
+                : box.unpackStatus === 'abnormal' && !box.abnormalNote
+                ? '缺少异常说明'
+                : '备注不完整'}
             </p>
           )}
 
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-            <div className={cn('flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium', statusConfig.bgColor, statusConfig.color)}>
-              <StatusIcon className="w-3 h-3" />
-              {statusConfig.label}
+          <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className={cn('flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium', statusConfig.bgColor, statusConfig.color)}>
+                <StatusIcon className="w-3 h-3" />
+                {statusConfig.label}
+              </div>
+
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowUnpackDropdown(!showUnpackDropdown);
+                  }}
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-colors',
+                    unpackStatusConfig.bgColor,
+                    unpackStatusConfig.color,
+                    unpackStatusConfig.borderColor,
+                    'hover:shadow-sm'
+                  )}
+                >
+                  <UnpackStatusIcon className={cn('w-3 h-3', box.unpackStatus === 'unpacking' && 'animate-spin')} />
+                  {unpackStatusConfig.label}
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+
+                {showUnpackDropdown && (
+                  <div
+                    className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 min-w-[120px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {UNPACK_STATUS_OPTIONS.map((opt) => {
+                      const Icon = unpackStatusIcons[opt.value];
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={(e) => handleUnpackStatusChange(e, opt.value)}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors text-left',
+                            box.unpackStatus === opt.value ? 'bg-gray-100' : 'hover:bg-gray-50',
+                            opt.color
+                          )}
+                        >
+                          <Icon className={cn('w-3 h-3', opt.value === 'unpacking' && 'animate-spin')} />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className={cn('flex items-center gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>

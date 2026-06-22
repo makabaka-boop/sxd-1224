@@ -1,4 +1,4 @@
-import type { BoxStatus, WeightLevel } from '../types';
+import type { BoxStatus, UnpackStatus, WeightLevel } from '../types';
 
 export const ROOMS: string[] = [
   '卧室',
@@ -23,6 +23,13 @@ export const STATUS_OPTIONS: { value: BoxStatus; label: string; color: string; b
   { value: 'postponed', label: '暂缓搬运', color: 'text-gray-700', bgColor: 'bg-gray-100' },
 ];
 
+export const UNPACK_STATUS_OPTIONS: { value: UnpackStatus; label: string; color: string; bgColor: string; borderColor: string }[] = [
+  { value: 'toUnpack', label: '待开箱', color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' },
+  { value: 'unpacking', label: '处理中', color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
+  { value: 'completed', label: '已完成', color: 'text-green-700', bgColor: 'bg-green-100', borderColor: 'border-green-300' },
+  { value: 'abnormal', label: '异常', color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
+];
+
 export const PRIORITY_LEVELS: { value: 1 | 2 | 3 | 4 | 5; label: string }[] = [
   { value: 1, label: '最低' },
   { value: 2, label: '较低' },
@@ -32,7 +39,7 @@ export const PRIORITY_LEVELS: { value: 1 | 2 | 3 | 4 | 5; label: string }[] = [
 ];
 
 export const DB_NAME = 'moving-boxes-db';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const STORE_NAME = 'boxes';
 
 export const MAX_HEAVY_BOXES_PER_ROOM = 3;

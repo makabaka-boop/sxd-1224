@@ -1,8 +1,8 @@
 import { Filter, X, ArrowUpDown } from 'lucide-react';
 import { useBoxStore } from '../hooks/useBoxStore';
-import { ROOMS, WEIGHT_LEVELS, STATUS_OPTIONS, PRIORITY_LEVELS } from '../utils/constants';
+import { ROOMS, WEIGHT_LEVELS, STATUS_OPTIONS, PRIORITY_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import { cn } from '../lib/utils';
-import type { BoxStatus, WeightLevel } from '../types';
+import type { BoxStatus, UnpackStatus, WeightLevel } from '../types';
 
 export const FilterBar = () => {
   const { filters, setFilter, clearFilters, sortBy, sortOrder, setSortBy, toggleSortOrder } =
@@ -65,8 +65,21 @@ export const FilterBar = () => {
             onChange={(e) => setFilter('status', (e.target.value as BoxStatus) || null)}
             className="px-3 py-2 rounded-lg border border-amber-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
           >
-            <option value="">所有状态</option>
+            <option value="">所有确认状态</option>
             {STATUS_OPTIONS.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filters.unpackStatus || ''}
+            onChange={(e) => setFilter('unpackStatus', (e.target.value as UnpackStatus) || null)}
+            className="px-3 py-2 rounded-lg border border-amber-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
+          >
+            <option value="">所有开箱状态</option>
+            {UNPACK_STATUS_OPTIONS.map((status) => (
               <option key={status.value} value={status.value}>
                 {status.label}
               </option>
@@ -82,6 +95,19 @@ export const FilterBar = () => {
             className="px-3 py-2 rounded-lg border border-amber-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
           >
             <option value="">是否易碎</option>
+            <option value="true">是</option>
+            <option value="false">否</option>
+          </select>
+
+          <select
+            value={filters.isAbnormal === null ? '' : String(filters.isAbnormal)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFilter('isAbnormal', val === '' ? null : val === 'true');
+            }}
+            className="px-3 py-2 rounded-lg border border-amber-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
+          >
+            <option value="">是否异常</option>
             <option value="true">是</option>
             <option value="false">否</option>
           </select>

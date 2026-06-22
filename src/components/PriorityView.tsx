@@ -1,12 +1,22 @@
-import { AlertTriangle, Wrench, Star, FileText, MapPin, Package } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Wrench, Star, FileText, MapPin, Package, ChevronDown, Clock, CheckCircle2, Loader2, AlertOctagon } from 'lucide-react';
 import { useBoxStore } from '../hooks/useBoxStore';
 import { RoomSummaryCard } from './RoomSummaryCard';
 import { getPriorityBoxes, getRoomSummaries } from '../utils/validation';
-import { ROOMS, STATUS_OPTIONS, WEIGHT_LEVELS } from '../utils/constants';
-import type { RoomSummary } from '../types';
+import { ROOMS, STATUS_OPTIONS, WEIGHT_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
+import type { RoomSummary, UnpackStatus } from '../types';
+import { cn } from '../lib/utils';
+
+const unpackStatusIcons = {
+  toUnpack: Clock,
+  unpacking: Loader2,
+  completed: CheckCircle2,
+  abnormal: AlertOctagon,
+};
 
 export const PriorityView = () => {
-  const { boxes } = useBoxStore();
+  const { boxes, updateBox } = useBoxStore();
+  const [dropdownOpenId, setDropdownOpenId] = useState<string | null>(null);
   const priorityBoxes = getPriorityBoxes(boxes);
   const roomSummaries = getRoomSummaries(priorityBoxes);
 
@@ -21,6 +31,8 @@ export const PriorityView = () => {
   }).filter((s) => s.totalCount > 0);
 
   priorityBoxes.sort((a, b) => {
+    if (a.unpackStatus === 'abnormal' && b.unpackStatus !== 'abnormal') return -1;
+    if (b.unpackStatus === 'abnormal' && a.unpackStatus !== 'abnormal') return 1;
     if (a.status === 'needsReinforcement' && b.status !== 'needsReinforcement') return -1;
     if (b.status === 'needsReinforcement' && a.status !== 'needsReinforcement') return 1;
     if (a.priorityLevel !== b.priorityLevel) return b.priorityLevel - a.priorityLevel;
@@ -28,6 +40,11 @@ export const PriorityView = () => {
     if (a.notes && !b.notes) return 1;
     return 0;
   });
+
+  const handleUnpackStatusChange = (boxId: string, status: UnpackStatus) => {
+    updateBox(boxId, { unpackStatus: status });
+    setDropdownOpenId(null);
+  };
 
   if (boxes.length === 0) {
     return (
@@ -85,7 +102,10 @@ export const PriorityView = () => {
                     优先级
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-amber-700 uppercase tracking-wider">
-                    状态
+                    确认状态
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-amber-700 uppercase tracking-wider">
+                    开箱状态
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-amber-700 uppercase tracking-wider">
                     需关注原因
@@ -95,7 +115,7 @@ export const PriorityView = () => {
               <tbody className="divide-y divide-gray-100">
                 {priorityBoxes.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                       🎉 太棒了！没有需要优先处理的箱子
                     </td>
                   </tr>
@@ -106,9 +126,12 @@ export const PriorityView = () => {
                     if (box.status === 'needsReinforcement') reasons.push('需加固');
                     if (!box.notes || box.notes.trim() === '') reasons.push('备注不完整');
                     if (box.isFragile && !box.fragileNote) reasons.push('易碎无提醒');
+                    if (box.unpackStatus === 'abnormal') reasons.push('开箱异常');
 
                     const weightConfig = WEIGHT_LEVELS.find((w) => w.value === box.weightLevel)!;
                     const statusConfig = STATUS_OPTIONS.find((s) => s.value === box.status)!;
+                    const unpackStatusConfig = UNPACK_STATUS_OPTIONS.find((s) => s.value === box.unpackStatus)!;
+                    const UnpackIcon = unpackStatusIcons[box.unpackStatus];
 
                     return (
                       <tr
@@ -135,6 +158,49 @@ export const PriorityView = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3">
+                          <div className="relative inline-block">
+                            <button
+                              onClick={() => setDropdownOpenId(dropdownOpenId === box.id ? null : box.id)}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-colors',
+                                unpackStatusConfig.bgColor,
+                                unpackStatusConfig.color,
+                                unpackStatusConfig.borderColor,
+                                'hover:shadow-sm'
+                              )}
+                            >
+                              <UnpackIcon className={cn('w-3 h-3', box.unpackStatus === 'unpacking' && 'animate-spin')} />
+                              {unpackStatusConfig.label}
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+
+                            {dropdownOpenId === box.id && (
+                              <div
+                                className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 min-w-[120px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {UNPACK_STATUS_OPTIONS.map((opt) => {
+                                  const Icon = unpackStatusIcons[opt.value];
+                                  return (
+                                    <button
+                                      key={opt.value}
+                                      onClick={() => handleUnpackStatusChange(box.id, opt.value)}
+                                      className={cn(
+                                        'w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors text-left',
+                                        box.unpackStatus === opt.value ? 'bg-gray-100' : 'hover:bg-gray-50',
+                                        opt.color
+                                      )}
+                                    >
+                                      <Icon className={cn('w-3 h-3', opt.value === 'unpacking' && 'animate-spin')} />
+                                      {opt.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {reasons.map((reason, idx) => (
                               <span
@@ -147,12 +213,15 @@ export const PriorityView = () => {
                                     ? 'bg-amber-100 text-amber-700'
                                     : reason === '备注不完整'
                                     ? 'bg-orange-100 text-orange-700'
+                                    : reason === '开箱异常'
+                                    ? 'bg-red-100 text-red-700'
                                     : 'bg-yellow-100 text-yellow-700'
                                 )}
                               >
                                 {reason === '需加固' && <Wrench className="w-3 h-3" />}
                                 {reason === '高优先级' && <Star className="w-3 h-3" />}
                                 {reason === '备注不完整' && <FileText className="w-3 h-3" />}
+                                {reason === '开箱异常' && <AlertOctagon className="w-3 h-3" />}
                                 {reason}
                               </span>
                             ))}
@@ -170,7 +239,3 @@ export const PriorityView = () => {
     </div>
   );
 };
-
-function cn(...classes: (string | undefined | false)[]): string {
-  return classes.filter(Boolean).join(' ');
-}

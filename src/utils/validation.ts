@@ -1,4 +1,4 @@
-import type { Box, ValidationWarning } from '../types';
+import type { Box, UnpackStatus, ValidationWarning } from '../types';
 import { MAX_HEAVY_BOXES_PER_ROOM, MAX_HIGH_PRIORITY_RATIO } from './constants';
 
 export const validateBoxes = (boxes: Box[]): ValidationWarning[] => {
@@ -9,6 +9,7 @@ export const validateBoxes = (boxes: Box[]): ValidationWarning[] => {
   warnings.push(...checkTooManyHeavyInRoom(boxes));
   warnings.push(...checkFragileWithoutNote(boxes));
   warnings.push(...checkTooManyHighPriority(boxes));
+  warnings.push(...checkAbnormalWithoutNote(boxes));
 
   return warnings;
 };
@@ -131,13 +132,36 @@ const checkTooManyHighPriority = (boxes: Box[]): ValidationWarning[] => {
   return warnings;
 };
 
+const checkAbnormalWithoutNote = (boxes: Box[]): ValidationWarning[] => {
+  const warnings: ValidationWarning[] = [];
+  const affectedIds: string[] = [];
+
+  boxes.forEach((box) => {
+    if (box.unpackStatus === 'abnormal' && (!box.abnormalNote || box.abnormalNote.trim() === '')) {
+      affectedIds.push(box.id);
+    }
+  });
+
+  if (affectedIds.length > 0) {
+    warnings.push({
+      type: 'abnormalWithoutNote',
+      severity: 'warning',
+      message: `${affectedIds.length} 个标记为异常的箱子缺少异常说明`,
+      affectedBoxIds: affectedIds,
+    });
+  }
+
+  return warnings;
+};
+
 export const getPriorityBoxes = (boxes: Box[]): Box[] => {
   return boxes.filter(
     (box) =>
       box.priorityLevel >= 4 ||
       box.status === 'needsReinforcement' ||
       !box.notes ||
-      box.notes.trim() === ''
+      box.notes.trim() === '' ||
+      box.unpackStatus === 'abnormal'
   );
 };
 
@@ -147,11 +171,40 @@ export const getRoomSummaries = (boxes: Box[]): Map<string, { total: number; pri
   boxes.forEach((box) => {
     const existing = summaries.get(box.targetRoom) || { total: 0, priority: 0, needsReinforcement: 0 };
     existing.total += 1;
-    if (box.priorityLevel >= 4 || !box.notes || box.notes.trim() === '') {
+    if (box.priorityLevel >= 4 || !box.notes || box.notes.trim() === '' || box.unpackStatus === 'abnormal') {
       existing.priority += 1;
     }
     if (box.status === 'needsReinforcement') {
       existing.needsReinforcement += 1;
+    }
+    summaries.set(box.targetRoom, existing);
+  });
+
+  return summaries;
+};
+
+export const getUnpackProgressSummaries = (
+  boxes: Box[]
+): Map<string, { total: number; toUnpack: number; unpacking: number; completed: number; abnormal: number }> => {
+  const summaries = new Map<string, { total: number; toUnpack: number; unpacking: number; completed: number; abnormal: number }>();
+
+  boxes.forEach((box) => {
+    const existing = summaries.get(box.targetRoom) || { total: 0, toUnpack: 0, unpacking: 0, completed: 0, abnormal: 0 };
+    existing.total += 1;
+    const status = box.unpackStatus as UnpackStatus;
+    switch (status) {
+      case 'toUnpack':
+        existing.toUnpack += 1;
+        break;
+      case 'unpacking':
+        existing.unpacking += 1;
+        break;
+      case 'completed':
+        existing.completed += 1;
+        break;
+      case 'abnormal':
+        existing.abnormal += 1;
+        break;
     }
     summaries.set(box.targetRoom, existing);
   });

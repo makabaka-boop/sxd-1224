@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Package } from 'lucide-react';
-import type { Box, BoxStatus, WeightLevel } from '../types';
+import { X, Package, MapPin, Calendar } from 'lucide-react';
+import type { Box, BoxStatus, UnpackStatus, WeightLevel } from '../types';
 import { useBoxStore } from '../hooks/useBoxStore';
-import { ROOMS, WEIGHT_LEVELS, STATUS_OPTIONS, PRIORITY_LEVELS } from '../utils/constants';
+import { ROOMS, WEIGHT_LEVELS, STATUS_OPTIONS, PRIORITY_LEVELS, UNPACK_STATUS_OPTIONS } from '../utils/constants';
 import { cn } from '../lib/utils';
 
 interface BoxFormProps {
@@ -10,6 +10,13 @@ interface BoxFormProps {
   onClose: () => void;
   editingBox?: Box | null;
 }
+
+const formatDateForInput = (date: Date | null): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
   const { addBox, updateBox, getNextLoadingOrder, isBoxNumberDuplicate } = useBoxStore();
@@ -24,6 +31,10 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
     loadingOrder: 1,
     status: 'pending' as BoxStatus,
     notes: '',
+    unpackStatus: 'toUnpack' as UnpackStatus,
+    actualPlacement: '',
+    unpackCompletedAt: null as Date | null,
+    abnormalNote: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -40,6 +51,10 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
         loadingOrder: editingBox.loadingOrder,
         status: editingBox.status,
         notes: editingBox.notes,
+        unpackStatus: editingBox.unpackStatus,
+        actualPlacement: editingBox.actualPlacement,
+        unpackCompletedAt: editingBox.unpackCompletedAt,
+        abnormalNote: editingBox.abnormalNote,
       });
     } else {
       setFormData({
@@ -53,6 +68,10 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
         loadingOrder: getNextLoadingOrder(),
         status: 'pending',
         notes: '',
+        unpackStatus: 'toUnpack',
+        actualPlacement: '',
+        unpackCompletedAt: null,
+        abnormalNote: '',
       });
     }
     setErrors({});
@@ -74,6 +93,9 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
     }
     if (formData.isFragile && !formData.fragileNote.trim()) {
       newErrors.fragileNote = '易碎物品请填写提醒说明';
+    }
+    if (formData.unpackStatus === 'abnormal' && !formData.abnormalNote.trim()) {
+      newErrors.abnormalNote = '异常状态请填写异常说明';
     }
 
     setErrors(newErrors);
@@ -99,7 +121,17 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'unpackStatus') {
+        if (value === 'completed' && !prev.unpackCompletedAt) {
+          updated.unpackCompletedAt = new Date();
+        } else if (value !== 'completed') {
+          updated.unpackCompletedAt = null;
+        }
+      }
+      return updated;
+    });
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -133,185 +165,270 @@ export const BoxForm = ({ isOpen, onClose, editingBox }: BoxFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                箱号 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.boxNumber}
-                onChange={(e) => handleChange('boxNumber', e.target.value)}
-                placeholder="例如: K-001"
-                className={cn(
-                  'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
-                  errors.boxNumber
-                    ? 'border-red-300 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
-                )}
-              />
-              {errors.boxNumber && <p className="text-red-500 text-xs mt-1">{errors.boxNumber}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                目标房间
-              </label>
-              <select
-                value={formData.targetRoom}
-                onChange={(e) => handleChange('targetRoom', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
-              >
-                {ROOMS.map((room) => (
-                  <option key={room} value={room}>
-                    {room}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                内容摘要 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.contentSummary}
-                onChange={(e) => handleChange('contentSummary', e.target.value)}
-                placeholder="例如: 厨房餐具"
-                className={cn(
-                  'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
-                  errors.contentSummary
-                    ? 'border-red-300 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
-                )}
-              />
-              {errors.contentSummary && (
-                <p className="text-red-500 text-xs mt-1">{errors.contentSummary}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                重量等级
-              </label>
-              <select
-                value={formData.weightLevel}
-                onChange={(e) => handleChange('weightLevel', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
-              >
-                {WEIGHT_LEVELS.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.label} ({level.description})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                装车顺序
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={formData.loadingOrder}
-                onChange={(e) => handleChange('loadingOrder', parseInt(e.target.value) || 1)}
-                className={cn(
-                  'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
-                  errors.loadingOrder
-                    ? 'border-red-300 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
-                )}
-              />
-              {errors.loadingOrder && (
-                <p className="text-red-500 text-xs mt-1">{errors.loadingOrder}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                优先打开程度
-              </label>
-              <select
-                value={formData.priorityLevel}
-                onChange={(e) =>
-                  handleChange('priorityLevel', parseInt(e.target.value) as 1 | 2 | 3 | 4 | 5)
-                }
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
-              >
-                {PRIORITY_LEVELS.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.value} - {level.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                确认状态
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => handleChange('status', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <label className="flex items-center gap-3 cursor-pointer">
+          <div className="border-b border-gray-200 pb-6">
+            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">基本信息</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  箱号 <span className="text-red-500">*</span>
+                </label>
                 <input
-                  type="checkbox"
-                  checked={formData.isFragile}
-                  onChange={(e) => handleChange('isFragile', e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                  type="text"
+                  value={formData.boxNumber}
+                  onChange={(e) => handleChange('boxNumber', e.target.value)}
+                  placeholder="例如: K-001"
+                  className={cn(
+                    'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
+                    errors.boxNumber
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
+                  )}
                 />
-                <span className="text-sm font-medium text-gray-700">易碎物品</span>
+                {errors.boxNumber && <p className="text-red-500 text-xs mt-1">{errors.boxNumber}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  目标房间
+                </label>
+                <select
+                  value={formData.targetRoom}
+                  onChange={(e) => handleChange('targetRoom', e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                >
+                  {ROOMS.map((room) => (
+                    <option key={room} value={room}>
+                      {room}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  内容摘要 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.contentSummary}
+                  onChange={(e) => handleChange('contentSummary', e.target.value)}
+                  placeholder="例如: 厨房餐具"
+                  className={cn(
+                    'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
+                    errors.contentSummary
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
+                  )}
+                />
+                {errors.contentSummary && (
+                  <p className="text-red-500 text-xs mt-1">{errors.contentSummary}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  重量等级
+                </label>
+                <select
+                  value={formData.weightLevel}
+                  onChange={(e) => handleChange('weightLevel', e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                >
+                  {WEIGHT_LEVELS.map((level) => (
+                    <option key={level.value} value={level.value}>
+                      {level.label} ({level.description})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  装车顺序
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.loadingOrder}
+                  onChange={(e) => handleChange('loadingOrder', parseInt(e.target.value) || 1)}
+                  className={cn(
+                    'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
+                    errors.loadingOrder
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
+                  )}
+                />
+                {errors.loadingOrder && (
+                  <p className="text-red-500 text-xs mt-1">{errors.loadingOrder}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  优先打开程度
+                </label>
+                <select
+                  value={formData.priorityLevel}
+                  onChange={(e) =>
+                    handleChange('priorityLevel', parseInt(e.target.value) as 1 | 2 | 3 | 4 | 5)
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                >
+                  {PRIORITY_LEVELS.map((level) => (
+                    <option key={level.value} value={level.value}>
+                      {level.value} - {level.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  确认状态
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleChange('status', e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isFragile}
+                    onChange={(e) => handleChange('isFragile', e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                  />
+                  <span className="text-sm font-medium text-gray-700">易碎物品</span>
+                </label>
+              </div>
+            </div>
+
+            {formData.isFragile && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  易碎提醒 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.fragileNote}
+                  onChange={(e) => handleChange('fragileNote', e.target.value)}
+                  placeholder="例如: 小心轻放，内含玻璃制品"
+                  className={cn(
+                    'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
+                    errors.fragileNote
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
+                  )}
+                />
+                {errors.fragileNote && (
+                  <p className="text-red-500 text-xs mt-1">{errors.fragileNote}</p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                备注
               </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => handleChange('notes', e.target.value)}
+                placeholder="其他需要注意的事项..."
+                rows={2}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all resize-none"
+              />
             </div>
           </div>
 
-          {formData.isFragile && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                易碎提醒 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.fragileNote}
-                onChange={(e) => handleChange('fragileNote', e.target.value)}
-                placeholder="例如: 小心轻放，内含玻璃制品"
-                className={cn(
-                  'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all',
-                  errors.fragileNote
-                    ? 'border-red-300 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
-                )}
-              />
-              {errors.fragileNote && (
-                <p className="text-red-500 text-xs mt-1">{errors.fragileNote}</p>
+          <div className="pb-2">
+            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              开箱进度信息
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  开箱状态
+                </label>
+                <select
+                  value={formData.unpackStatus}
+                  onChange={(e) => handleChange('unpackStatus', e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                >
+                  {UNPACK_STATUS_OPTIONS.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <MapPin className="w-4 h-4 text-gray-400" />
+                  实际放置位置
+                </label>
+                <input
+                  type="text"
+                  value={formData.actualPlacement}
+                  onChange={(e) => handleChange('actualPlacement', e.target.value)}
+                  placeholder="例如: 主卧衣柜左侧"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                />
+              </div>
+
+              {formData.unpackStatus === 'completed' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    开箱完成时间
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={formatDateForInput(formData.unpackCompletedAt)}
+                    onChange={(e) =>
+                      handleChange(
+                        'unpackCompletedAt',
+                        e.target.value ? new Date(e.target.value) : null
+                      )
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all"
+                  />
+                </div>
               )}
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              备注
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => handleChange('notes', e.target.value)}
-              placeholder="其他需要注意的事项..."
-              rows={3}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-all resize-none"
-            />
+            {formData.unpackStatus === 'abnormal' && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  异常说明 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={formData.abnormalNote}
+                  onChange={(e) => handleChange('abnormalNote', e.target.value)}
+                  placeholder="请描述异常情况，例如: 物品损坏、缺失等..."
+                  rows={3}
+                  className={cn(
+                    'w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 transition-all resize-none',
+                    errors.abnormalNote
+                      ? 'border-red-300 focus:ring-red-200'
+                      : 'border-gray-200 focus:ring-amber-200 focus:border-amber-400'
+                  )}
+                />
+                {errors.abnormalNote && (
+                  <p className="text-red-500 text-xs mt-1">{errors.abnormalNote}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Box, BoxStatus, FilterOptions, ValidationWarning, WeightLevel } from '../types';
+import type { Box, BoxStatus, FilterOptions, UnpackProgressSummary, UnpackStatus, ValidationWarning, WeightLevel } from '../types';
 import {
   getAllBoxes,
   addBox as addBoxToDB,
@@ -9,7 +9,8 @@ import {
   bulkAddBoxes,
   clearAllBoxes,
 } from '../hooks/useIndexedDB';
-import { validateBoxes } from '../utils/validation';
+import { validateBoxes, getUnpackProgressSummaries } from '../utils/validation';
+import { ROOMS } from '../utils/constants';
 
 interface BoxStore {
   boxes: Box[];
@@ -27,6 +28,7 @@ interface BoxStore {
   duplicateBox: (id: string) => Promise<void>;
   swapLoadingOrder: (activeId: string, overId: string) => Promise<void>;
   batchUpdateStatus: (ids: string[], status: BoxStatus) => Promise<void>;
+  batchUpdateUnpackStatus: (ids: string[], unpackStatus: UnpackStatus) => Promise<void>;
   isBoxNumberDuplicate: (boxNumber: string, excludeId?: string) => boolean;
   importBoxes: (boxes: Omit<Box, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<void>;
   clearAll: () => Promise<void>;
@@ -44,6 +46,7 @@ interface BoxStore {
   runValidation: () => void;
   getFilteredBoxes: () => Box[];
   getNextLoadingOrder: () => number;
+  getUnpackProgress: (roomFilter?: string | null, statusFilter?: UnpackStatus | null, abnormalFilter?: boolean | null) => UnpackProgressSummary[];
 }
 
 export const useBoxStore = create<BoxStore>((set, get) => ({
@@ -54,6 +57,8 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     priorityLevel: null,
     status: null,
     isFragile: null,
+    unpackStatus: null,
+    isAbnormal: null,
   },
   selectedBoxIds: new Set(),
   validationWarnings: [],
@@ -80,7 +85,13 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
   },
 
   updateBox: async (id, updates) => {
-    const updatedBox = await updateBoxInDB(id, updates);
+    const finalUpdates = { ...updates };
+    if (updates.unpackStatus === 'completed' && !updates.unpackCompletedAt) {
+      finalUpdates.unpackCompletedAt = new Date();
+    } else if (updates.unpackStatus && updates.unpackStatus !== 'completed') {
+      finalUpdates.unpackCompletedAt = null;
+    }
+    const updatedBox = await updateBoxInDB(id, finalUpdates);
     if (updatedBox) {
       set((state) => ({
         boxes: state.boxes.map((box) => (box.id === id ? updatedBox : box)),
@@ -113,6 +124,10 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
       loadingOrder: get().getNextLoadingOrder(),
       status: 'pending' as BoxStatus,
       notes: box.notes,
+      unpackStatus: 'toUnpack' as UnpackStatus,
+      actualPlacement: '',
+      unpackCompletedAt: null,
+      abnormalNote: '',
     };
 
     await get().addBox(newBoxData);
@@ -168,6 +183,35 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     get().runValidation();
   },
 
+  batchUpdateUnpackStatus: async (ids, unpackStatus) => {
+    const updates = ids.map((id) => {
+      const changes: Partial<Box> = { unpackStatus };
+      if (unpackStatus === 'completed') {
+        changes.unpackCompletedAt = new Date();
+      } else {
+        changes.unpackCompletedAt = null;
+      }
+      return { id, changes };
+    });
+    await updateBoxesBatch(updates);
+
+    set((state) => ({
+      boxes: state.boxes.map((box) => {
+        if (ids.includes(box.id)) {
+          const changes: Partial<Box> = { unpackStatus, updatedAt: new Date() };
+          if (unpackStatus === 'completed') {
+            changes.unpackCompletedAt = new Date();
+          } else {
+            changes.unpackCompletedAt = null;
+          }
+          return { ...box, ...changes };
+        }
+        return box;
+      }),
+    }));
+    get().runValidation();
+  },
+
   importBoxes: async (boxesData) => {
     const newBoxes = await bulkAddBoxes(boxesData);
     set((state) => ({ boxes: [...state.boxes, ...newBoxes] }));
@@ -193,6 +237,8 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
         priorityLevel: null,
         status: null,
         isFragile: null,
+        unpackStatus: null,
+        isAbnormal: null,
       },
     });
   },
@@ -250,6 +296,12 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     if (filters.isFragile !== null) {
       filtered = filtered.filter((b) => b.isFragile === filters.isFragile);
     }
+    if (filters.unpackStatus) {
+      filtered = filtered.filter((b) => b.unpackStatus === filters.unpackStatus);
+    }
+    if (filters.isAbnormal !== null) {
+      filtered = filtered.filter((b) => (b.unpackStatus === 'abnormal') === filters.isAbnormal);
+    }
 
     filtered.sort((a, b) => {
       let comparison = 0;
@@ -274,5 +326,73 @@ export const useBoxStore = create<BoxStore>((set, get) => ({
     const boxes = get().boxes;
     if (boxes.length === 0) return 1;
     return Math.max(...boxes.map((b) => b.loadingOrder)) + 1;
+  },
+
+  getUnpackProgress: (roomFilter?: string | null, statusFilter?: UnpackStatus | null, abnormalFilter?: boolean | null) => {
+    const { boxes } = get();
+    const summaries = getUnpackProgressSummaries(boxes);
+
+    const rooms = roomFilter ? [roomFilter] : ROOMS;
+
+    return rooms
+      .map((room) => {
+        const data = summaries.get(room) || {
+          total: 0,
+          toUnpack: 0,
+          unpacking: 0,
+          completed: 0,
+          abnormal: 0,
+        };
+
+        let filteredData = { ...data };
+        if (statusFilter) {
+          const statusCounts = {
+            toUnpack: filteredData.toUnpack,
+            unpacking: filteredData.unpacking,
+            completed: filteredData.completed,
+            abnormal: filteredData.abnormal,
+          };
+          filteredData = {
+            ...filteredData,
+            toUnpack: statusFilter === 'toUnpack' ? statusCounts.toUnpack : 0,
+            unpacking: statusFilter === 'unpacking' ? statusCounts.unpacking : 0,
+            completed: statusFilter === 'completed' ? statusCounts.completed : 0,
+            abnormal: statusFilter === 'abnormal' ? statusCounts.abnormal : 0,
+            total: statusCounts[statusFilter],
+          };
+        }
+        if (abnormalFilter === true) {
+          filteredData = {
+            ...filteredData,
+            total: filteredData.abnormal,
+            toUnpack: 0,
+            unpacking: 0,
+            completed: 0,
+          };
+        } else if (abnormalFilter === false) {
+          filteredData = {
+            ...filteredData,
+            abnormal: 0,
+            total: filteredData.total - data.abnormal,
+          };
+        }
+
+        const rate = filteredData.total > 0
+          ? Math.round((filteredData.completed / filteredData.total) * 100)
+          : 0;
+
+        return {
+          room,
+          totalCount: filteredData.total,
+          toUnpackCount: filteredData.toUnpack,
+          unpackingCount: filteredData.unpacking,
+          completedCount: filteredData.completed,
+          abnormalCount: filteredData.abnormal,
+          completionRate: rate,
+          _hasOriginalData: data.total > 0,
+        };
+      })
+      .filter((s) => s.totalCount > 0 || s._hasOriginalData)
+      .map(({ _hasOriginalData, ...rest }) => rest);
   },
 }));
